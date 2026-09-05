@@ -29,39 +29,6 @@ async function api(action, payload = {}) {
   return data;
 }
 
-const demo = {
-  user: { role: "parent", name: "Sarah", studentId: "S001", studentName: "Emma" },
-  syllabus: [
-    { week: 1, term: 1, title: "Getting Started", piece: "Ode to Joy", objectives: ["Correct posture", "Five-finger position", "Steady pulse"] },
-    { week: 2, term: 1, title: "Reading & Rhythm", piece: "Ode to Joy", objectives: ["Treble clef notes", "Quarter notes", "Count aloud"] },
-    { week: 3, term: 1, title: "C Major", piece: "Morning", objectives: ["C major scale", "Hands separately", "Simple dynamics"] },
-    { week: 4, term: 1, title: "Two-Hand Coordination", piece: "Morning", objectives: ["Hands together", "Legato", "Phrase endings"] },
-    { week: 5, term: 1, title: "Chords", piece: "Blue Skies", objectives: ["I–IV–V chords", "Chord changes", "Accompaniment pattern"] },
-    { week: 6, term: 1, title: "Musical Expression", piece: "Blue Skies", objectives: ["Dynamics", "Articulation", "Musical phrasing"] },
-    { week: 7, term: 1, title: "Technique Review", piece: "Minuet", objectives: ["Scales", "Arpeggio shape", "Even tone"] },
-    { week: 8, term: 1, title: "Performance Preparation", piece: "Minuet", objectives: ["Memory", "Confidence", "Performance run-through"] }
-  ],
-  grades: [
-    { week: 4, grade: 8, comment: "Good coordination. Keep the pulse steady." },
-    { week: 5, grade: 8.5, comment: "Strong chord changes." },
-    { week: 6, grade: 9, comment: "Excellent musical expression." },
-    { week: 7, grade: 8.5, comment: "Great technique; polish the ending." },
-    { week: 8, grade: 9, comment: "Excellent progress this week." }
-  ],
-  practice: { week: 8, days: [true, true, true, true, false, false, false], target: 5 },
-  signoffs: [{ week: 7, signedAt: "2026-08-28T16:10:00Z" }],
-  resources: [
-    { id:"R1", title:"Practice planner", type:"PDF", description:"A simple weekly practice routine.", url:"#"},
-    { id:"R2", title:"Note reading trainer", type:"TRAINER", description:"Quick drills for note recognition.", url:"#"},
-    { id:"R3", title:"Warm-up routine", type:"VIDEO", description:"A 7-minute technique warm-up.", url:"#"}
-  ],
-  students: [
-    { id:"S001", name:"Emma", level:"Grade 2", week:8, parent:"Sarah", active:true, latest:9, practice:4, signed:false },
-    { id:"S002", name:"James", level:"Grade 3", week:8, parent:"Michael", active:true, latest:8, practice:5, signed:true },
-    { id:"S003", name:"Sophie", level:"Grade 1", week:8, parent:"Laura", active:true, latest:7, practice:2, signed:false },
-    { id:"S004", name:"Oliver", level:"Grade 2", week:7, parent:"Tom", active:true, latest:8.5, practice:5, signed:true }
-  ]
-};
 
 function useSession() {
   const [session, setSession] = useState(() => {
@@ -92,8 +59,8 @@ function App() {
     if (!session) return;
     setLoading(true);
     try {
-      if (!apiConfigured() || session.demo) {
-        setData(demo);
+      if (!apiConfigured()) {
+        setData(null);
       } else {
         const result = await api("bootstrap", { token: session.token });
         setData(result.data);
@@ -241,7 +208,6 @@ function Dashboard({user,data,role,session,setView,notify,updateData}) {
         <div className="practice-summary"><strong>{practiced} of {practice.target} days</strong><span>{practice.tasks || "Technique, scales and repertoire as set by your teacher."}</span></div>
         {user.role==="parent" && !signed && <button className="primary-btn" onClick={async()=>{
           try {
-            if (session.demo) { notify("Demo mode cannot persist sign-off."); return; }
             const r = await api("signoffPractice",{token:session.token,week:practice.week});
             updateData(r.data);
             notify("Practice sign-off submitted.");
@@ -303,7 +269,6 @@ function Syllabus({data,role,session,update,notify}) {
   const [editing,setEditing]=useState(null);
   const list=data.syllabus||[];
   const save = async (item) => {
-    if(session.demo){ update({syllabus:list.map(x=>x.week===item.week?item:x)}); notify("Syllabus updated."); setEditing(null); return; }
     try { const r=await api("upsertSyllabus",{token:session.token,item}); update({syllabus:r.syllabus}); notify("Syllabus saved."); setEditing(null); }
     catch { notify("Could not save syllabus."); }
   };
@@ -340,7 +305,6 @@ function Students({data,session,notify}) {
   const list=(data.students||[]).filter(s=>(s.name||"").toLowerCase().includes(q.toLowerCase()));
   const student=list.find(s=>s.id===selected)||list[0];
   const save = async (item) => {
-    if(session.demo){ notify("Demo mode cannot persist changes."); setModal(null); return; }
     try { await api("upsertStudent",{token:session.token,item}); notify("Student saved."); setModal(null); window.location.reload(); }
     catch { notify("Could not save student."); }
   };
@@ -351,7 +315,6 @@ function Students({data,session,notify}) {
     {student&&<aside className="student-detail"><div className="detail-head"><Avatar name={student.name}/><div><h3>{student.name}</h3><p>{student.level} · Week {student.week}</p></div></div><div className="detail-stats"><div><span>Latest grade</span><strong>{student.latest??"—"}</strong></div><div><span>Practice</span><strong>{student.practice??0} days</strong></div></div><div className="detail-block"><span className="eyebrow">PARENT</span><strong>{student.parent||"—"}</strong></div><div className="detail-block"><span className="eyebrow">PRACTICE SIGN-OFF</span><strong>{student.signed?"Complete":"Pending"}</strong><p>Teacher view of this week's confirmation.</p></div><button className="secondary-btn wide" onClick={()=>setModal({...student})}><Pencil size={14}/> Edit student</button>
       <button className="danger-btn wide" onClick={async()=>{
         if(!confirm(`Deactivate ${student.name}?`)) return;
-        if(session.demo){ notify("Demo mode cannot persist changes."); return; }
         try { await api("deleteStudent",{token:session.token,studentId:student.id}); notify("Student deactivated."); window.location.reload(); }
         catch { notify("Could not deactivate student."); }
       }}><X size={14}/> Deactivate student</button></aside>}
@@ -371,7 +334,6 @@ function WeeklyGrades({data,session,update,notify}) {
   const students=(data.students||[]).filter(s=>s.active!==false); const [week,setWeek]=useState(data.currentWeek||students[0]?.week||1);
   const [rows,setRows]=useState(students.map(s=>({id:s.id,grade:s.latest??"",comment:""})));
   const save=async()=>{
-    if(session.demo){notify("Demo mode cannot persist grades.");return;}
     try { const r=await api("saveWeeklyGrades",{token:session.token,week,grades:rows}); update({students:r.students}); notify("Weekly grades saved."); }
     catch { notify("Could not save grades."); }
   };
